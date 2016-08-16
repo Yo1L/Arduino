@@ -25,10 +25,10 @@ int speed = 80;
 #define MOTOR_MOVE_LEFT 3
 #define MOTOR_MOVE_RIGHT 4
 
-#define BUFFSIZE  64
-#define COMMANDSIZE 4
+#define BUFFSIZE  4
 
-#define COMMAND_ARGC(x) (x-1)
+#define BT_RUN    0x1
+#define BT_SPEED  0x2
 
 template<class T> T clamp(T value, T min, T max) {
   if( value < min ) {
@@ -60,7 +60,7 @@ void toggleRun(bool isRunning) {
   }
 }
 
-char btBuffer[BUFFSIZE];
+uint8_t btBuffer[BUFFSIZE];
 size_t bufferPosition = 0;
 
 void resetBluetoothBuffer() {
@@ -74,7 +74,7 @@ void readBluetoothCommand() {
   for( ; bt.available() && bufferPosition<(BUFFSIZE-1); bufferPosition++ ) {
     btBuffer[bufferPosition] = bt.read();
     
-    if( btBuffer[bufferPosition] == '\n' && bufferPosition>0 ) {
+    if( bufferPosition == 1 /*|| btBuffer[bufferPosition] == '\n' && bufferPosition>0*/ ) {
       parseBluetoothCommand(btBuffer, bufferPosition+1);
       resetBluetoothBuffer();
       return;
@@ -87,52 +87,37 @@ void readBluetoothCommand() {
 }
 
 void parseBluetoothCommand(char *buff, size_t size) {
-  char *commands[COMMANDSIZE];
-  commands[0] = &buff[0];
-    
-  int c=1;
-  for( int i=1; i<size && c<COMMANDSIZE; i++ ) {
-    if( buff[i-1] == ':' || buff[i-1] == '\n' ) {
-      buff[i-1] = 0;
-      commands[c++] = &buff[i];
-    }
-  }
-
   /*writeBluetoothCommand(commands[0]);
   writeBluetoothCommand(commands[1]);*/
-  
-  if( strcmp(commands[0], "run") == 0 ) {
-    /**
-     * run:[0|1]
-     */
-    if( COMMAND_ARGC(c) != 1 ) {
-      writeBluetoothCommand("run:error");
-      return false;
-    }
-    
-    short status = atoi(commands[1]);
-    toggleRun(status == 0 ? false : true);
-    
-    writeBluetoothCommand("run:ok");
-    //bt.write(status);
-  }
-  else if( strcmp(commands[0], "speed") == 0 ) {
-    /**
-     * speed:[0-255]
-     */
-    if( COMMAND_ARGC(c) != 1 ) {
-      writeBluetoothCommand("speed:error");
-      return false;
-    }
-    
-    int value = atoi(commands[1]);
-    speed = clamp(value, 0, 255);
 
-    writeBluetoothCommand("speed:ok");
-    //bt.write(speed);
-  }
-  else {
-    writeBluetoothCommand(commands[0]);
+  switch(buff[0]) {
+    case BT_RUN: 
+      {
+        /**
+         * run:[0|1]
+         */
+        toggleRun(buff[1] == 0 ? false : true);
+        writeBluetoothCommand("run:ok");
+      }
+      break;
+
+    case BT_SPEED: 
+      {
+        /**
+         * speed:[0-255]
+         */
+        int value = 0xff & buff[1]; // convert unsigned to signed int
+        speed = clamp(value, 0, 255);
+    
+        writeBluetoothCommand("speed:ok");
+        Serial.println(speed);
+        //bt.write(speed);
+      }
+      break;
+
+    default:
+      writeBluetoothCommand("Unknown command");
+      break;
   }
 }
 
