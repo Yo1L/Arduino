@@ -25,24 +25,10 @@ int speed = 80;
 #define MOTOR_MOVE_LEFT 3
 #define MOTOR_MOVE_RIGHT 4
 
+#define BUFFSIZE  64
+#define COMMANDSIZE 4
 
-void setup(){
-  rgbled_7.setColor(0,0,0,0);
-  rgbled_7.show();
-
-  bt.begin(115200);
-  ir.begin();
-
-  pinMode(A7, INPUT);
-
-  direction = MOTOR_MOVE_FORWARD;
-
-  Serial.begin(115200);
-
-  lastRun = millis();
-}
-
-#define COMMAND_ARGC(x) (x)
+#define COMMAND_ARGC(x) (x-1)
 
 template<class T> T clamp(T value, T min, T max) {
   if( value < min ) {
@@ -74,55 +60,46 @@ void toggleRun(bool isRunning) {
   }
 }
 
+char btBuffer[BUFFSIZE];
+size_t bufferPosition = 0;
+
+void resetBluetoothBuffer() {
+  memset(btBuffer, 0, sizeof(char)*BUFFSIZE);
+  bufferPosition = 0;
+}
 /**
  * Read Bluetooth command
  */
-bool readBluetoothCommand() {
-  if( !bt.available() ) {
-    return false;
+void readBluetoothCommand() {  
+  for( ; bt.available() && bufferPosition<(BUFFSIZE-1); bufferPosition++ ) {
+    btBuffer[bufferPosition] = bt.read();
+    
+    if( btBuffer[bufferPosition] == '\n' && bufferPosition>0 ) {
+      parseBluetoothCommand(btBuffer, bufferPosition+1);
+      resetBluetoothBuffer();
+      return;
+    }
   }
 
-  const size_t BUFFSIZE = 64;
-  const size_t COMMANDSIZE = 4;
-  char buffer[BUFFSIZE];
-  
-  int i=0;
-  int c=0;
-  memset(buffer, 0, sizeof(char)*BUFFSIZE);
+  if( bufferPosition>=BUFFSIZE ) {
+    resetBluetoothBuffer();
+  }
+}
+
+void parseBluetoothCommand(char *buff, size_t size) {
   char *commands[COMMANDSIZE];
-  commands[0] = &buffer[0];
-  for( i=0; bt.available() && i<(BUFFSIZE-1) && c<COMMANDSIZE; i++ ) {
-    char in = bt.read();
-    //bt.write(in);
-    if( in == ':' ) {
-      //bt.write(':');
-      buffer[i] = '\0';
-      commands[++c] = &buffer[i+1];
-      continue;
-    }
-    else if( in == '\n' ) {
-      // stop here
-      buffer[i] = '\0';
-      break;
-    }
-    else {
-      //bt.write(i);
-      buffer[i] = in;
-    }
-
-    // wait max 30ms for transmission
-    for( int w=0; w<3 && !bt.available(); w++ ) {
-      delay(10); 
+  commands[0] = &buff[0];
+    
+  int c=1;
+  for( int i=1; i<size && c<COMMANDSIZE; i++ ) {
+    if( buff[i-1] == ':' || buff[i-1] == '\n' ) {
+      buff[i-1] = 0;
+      commands[c++] = &buff[i];
     }
   }
 
-  writeBluetoothCommand(commands[0]);
-  writeBluetoothCommand(commands[1]);
-
-  /*Serial.println("--- Commands received: ");
-  Serial.println(commands[0]);
-  Serial.println(commands[1]);
-  Serial.println("-- END");*/
+  /*writeBluetoothCommand(commands[0]);
+  writeBluetoothCommand(commands[1]);*/
   
   if( strcmp(commands[0], "run") == 0 ) {
     /**
@@ -157,8 +134,24 @@ bool readBluetoothCommand() {
   else {
     writeBluetoothCommand(commands[0]);
   }
+}
 
-  return true;
+void setup(){
+  rgbled_7.setColor(0,0,0,0);
+  rgbled_7.show();
+
+  bt.begin(115200);
+  ir.begin();
+
+  pinMode(A7, INPUT);
+
+  direction = MOTOR_MOVE_FORWARD;
+
+  Serial.begin(115200);
+
+  lastRun = millis();
+
+  resetBluetoothBuffer();
 }
 
 void loop() {
