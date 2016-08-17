@@ -27,8 +27,9 @@ int speed = 80;
 
 #define BUFFSIZE  4
 
-#define BT_RUN    0x1
-#define BT_SPEED  0x2
+#define BT_RUN        0x1
+#define BT_SPEED      0x2
+#define BT_DIRECTION  0x4
 
 template<class T> T clamp(T value, T min, T max) {
   if( value < min ) {
@@ -110,11 +111,20 @@ void parseBluetoothCommand(char *buff, size_t size) {
         speed = clamp(value, 0, 255);
     
         writeBluetoothCommand("speed:ok");
-        Serial.println(speed);
-        //bt.write(speed);
       }
       break;
 
+    case BT_DIRECTION:
+      {
+        /**
+         * direction: [0-4]
+         */
+        int value = 0xff & buff[1];
+        direction = clamp(value, 0, 4);
+        writeBluetoothCommand("direction:ok");
+      }
+      break;
+      
     default:
       writeBluetoothCommand("Unknown command");
       break;
