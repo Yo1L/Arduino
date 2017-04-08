@@ -1,5 +1,5 @@
 # Arduino
-Here my Arduino projetcs
+Here's my Arduino projetcs. Not so many right now :)
 
 
 ## iPhone-BT
